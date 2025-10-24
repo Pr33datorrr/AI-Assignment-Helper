@@ -28,7 +28,6 @@ const InputBar: React.FC<InputBarProps> = ({ onSendMessage, isLoading }) => {
     const needsImageUpload = [
         GenerationMode.EditImage,
         GenerationMode.AnalyzeImage,
-        GenerationMode.GenerateVideo, // Optional for video
     ].includes(mode);
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -47,7 +46,7 @@ const InputBar: React.FC<InputBarProps> = ({ onSendMessage, isLoading }) => {
         }
 
         onSendMessage(prompt, mode, { 
-            aspectRatio: (mode === GenerationMode.GenerateImage || mode === GenerationMode.GenerateVideo) ? aspectRatio : undefined, 
+            aspectRatio: (mode === GenerationMode.GenerateImage) ? aspectRatio : undefined, 
             imageFile: imageFile ?? undefined,
             presentationTemplate: mode === GenerationMode.GeneratePPT ? presentationTemplate : undefined,
         });
@@ -111,7 +110,7 @@ const InputBar: React.FC<InputBarProps> = ({ onSendMessage, isLoading }) => {
                 
                 {/* Mode-specific Options */}
                 <div className="flex items-center gap-4">
-                    {(mode === GenerationMode.GenerateImage || mode === GenerationMode.GenerateVideo) && (
+                    {mode === GenerationMode.GenerateImage && (
                         <div>
                             <label htmlFor="aspectRatio" className="text-sm text-gray-400 mr-2">Aspect Ratio:</label>
                             <select

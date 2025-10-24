@@ -9,7 +9,6 @@ export enum GenerationMode {
   Chat = 'Chat',
   GenerateImage = 'Generate Image',
   EditImage = 'Edit Image',
-  GenerateVideo = 'Generate Video',
   AnalyzeImage = 'Analyze Image',
   ComplexQuery = 'Complex Query',
   SearchWeb = 'Search Web',
@@ -34,7 +33,6 @@ export interface Message {
   sender: Sender;
   text: string;
   imageUrl?: string;
-  videoUrl?: string;
   isLoading?: boolean;
   references?: GroundingChunk[];
   jsonContent?: any;

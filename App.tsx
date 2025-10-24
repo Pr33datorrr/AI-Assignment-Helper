@@ -3,7 +3,6 @@ import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatView from './components/ChatView';
 import { Project, Message } from './types';
-import ApiKeySelector from './components/ApiKeySelector';
 
 const App: React.FC = () => {
     const [projects, setProjects] = useState<Project[]>([]);
@@ -85,32 +84,30 @@ const App: React.FC = () => {
     const activeProject = projects.find(p => p.id === activeProjectId);
 
     return (
-        <ApiKeySelector>
-            <div className="flex h-screen font-sans">
-                <Sidebar
-                    projects={projects}
-                    activeProjectId={activeProjectId}
-                    onSelectProject={handleSelectProject}
-                    onCreateProject={() => handleCreateProject()}
-                    onSelectVersion={handleSelectVersion}
-                />
-                <main className="flex-1">
-                    {activeProject ? (
-                        <ChatView
-                            project={activeProject}
-                            onUpdateProject={handleUpdateProject}
-                        />
-                    ) : (
-                        <div className="flex items-center justify-center h-full text-gray-500">
-                           <div className="text-center">
-                             <h2 className="text-2xl font-semibold">No Project Selected</h2>
-                             <p>Create a new project or select one from the sidebar to begin.</p>
-                           </div>
-                        </div>
-                    )}
-                </main>
-            </div>
-        </ApiKeySelector>
+        <div className="flex h-screen font-sans">
+            <Sidebar
+                projects={projects}
+                activeProjectId={activeProjectId}
+                onSelectProject={handleSelectProject}
+                onCreateProject={() => handleCreateProject()}
+                onSelectVersion={handleSelectVersion}
+            />
+            <main className="flex-1">
+                {activeProject ? (
+                    <ChatView
+                        project={activeProject}
+                        onUpdateProject={handleUpdateProject}
+                    />
+                ) : (
+                    <div className="flex items-center justify-center h-full text-gray-500">
+                       <div className="text-center">
+                         <h2 className="text-2xl font-semibold">No Project Selected</h2>
+                         <p>Create a new project or select one from the sidebar to begin.</p>
+                       </div>
+                    </div>
+                )}
+            </main>
+        </div>
     );
 };
 

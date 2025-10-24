@@ -4,7 +4,6 @@ import { Project, Message, Sender, GenerationMode, AspectRatio, GroundingChunk, 
 import MessageComponent from './Message';
 import InputBar from './InputBar';
 import * as geminiService from '../services/geminiService';
-import { useVeo } from '../hooks/useVeo';
 
 interface ChatViewProps {
     project: Project;
@@ -15,7 +14,6 @@ const ChatView: React.FC<ChatViewProps> = ({ project, onUpdateProject }) => {
     const [messages, setMessages] = useState<Message[]>(project.history);
     const [isLoading, setIsLoading] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
-    const { status: veoStatus, videoUrl: veoVideoUrl, error: veoError, startGeneration: startVeoGeneration } = useVeo();
 
     useEffect(() => {
         setMessages(project.history);
@@ -25,33 +23,6 @@ const ChatView: React.FC<ChatViewProps> = ({ project, onUpdateProject }) => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
     
-    useEffect(() => {
-        if (veoStatus === 'generating' && !messages.some(m => m.isLoading && m.text.includes('Generating video'))) {
-             const loadingMsg: Message = {
-                id: `vloading-${Date.now()}`,
-                sender: Sender.AI,
-                text: 'Generating video... This may take a few minutes. Please wait.',
-                isLoading: true
-            };
-            setMessages(prev => [...prev, loadingMsg]);
-        } else if (veoStatus === 'success' && veoVideoUrl) {
-            const videoMsg: Message = {
-                id: `vsuccess-${Date.now()}`,
-                sender: Sender.AI,
-                text: 'Your video has been generated!',
-                videoUrl: veoVideoUrl,
-            };
-            setMessages(prev => prev.filter(m => !m.isLoading).concat(videoMsg));
-        } else if (veoStatus === 'error' && veoError) {
-             const errorMsg: Message = {
-                id: `verror-${Date.now()}`,
-                sender: Sender.AI,
-                text: `Video generation failed: ${veoError}`,
-            };
-            setMessages(prev => prev.filter(m => !m.isLoading).concat(errorMsg));
-        }
-    }, [veoStatus, veoVideoUrl, veoError]);
-
     const updateHistory = (newHistory: Message[]) => {
         onUpdateProject(project.id, { history: newHistory });
     };
@@ -104,14 +75,6 @@ const ChatView: React.FC<ChatViewProps> = ({ project, onUpdateProject }) => {
                     aiResponse.imageUrl = await geminiService.editImage(prompt, options.imageFile!);
                     aiResponse.text = "Here is the edited image.";
                     break;
-                case GenerationMode.GenerateVideo:
-                     if(options.aspectRatio !== '16:9' && options.aspectRatio !== '9:16') {
-                        throw new Error("Video generation only supports 16:9 or 9:16 aspect ratio.");
-                    }
-                    await startVeoGeneration(prompt, options.aspectRatio, options.imageFile);
-                    setMessages(prev => prev.filter(m => m.id !== loadingMsg.id));
-                    setIsLoading(false);
-                    return; 
                 case GenerationMode.AnalyzeImage:
                     aiResponse.text = await geminiService.analyzeImage(prompt, options.imageFile!);
                     break;
@@ -180,7 +143,7 @@ const ChatView: React.FC<ChatViewProps> = ({ project, onUpdateProject }) => {
                 ))}
                 <div ref={messagesEndRef} />
             </main>
-            <InputBar onSendMessage={handleSendMessage} isLoading={isLoading || veoStatus === 'generating'} />
+            <InputBar onSendMessage={handleSendMessage} isLoading={isLoading} />
         </div>
     );
 };

@@ -74,7 +74,6 @@ const Message: React.FC<MessageProps> = ({ message }) => {
         ) : (
           <>
             {message.imageUrl && <img src={message.imageUrl} alt="Generated content" className="rounded-lg mb-2 max-w-sm" />}
-            {message.videoUrl && <video src={message.videoUrl} controls className="rounded-lg mb-2 max-w-sm" />}
             
             <div className="prose prose-invert max-w-none prose-p:my-1 prose-headings:my-2" dangerouslySetInnerHTML={{ __html: parsedHtml }} />
 

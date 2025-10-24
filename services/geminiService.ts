@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, GenerateContentResponse, Type, Modality } from "@google/genai";
 import { fileToBase64 } from '../utils/fileUtils';
 import { AspectRatio, GroundingChunk, PresentationTemplate } from '../types';
@@ -89,45 +90,6 @@ export const editImage = async (prompt: string, imageFile: File): Promise<string
 };
 
 
-export const generateVideo = async (prompt: string, aspectRatio: '16:9' | '9:16', imageFile?: File) => {
-    const ai = createGenAI();
-    let operation;
-    
-    if (imageFile) {
-        const base64Data = await fileToBase64(imageFile);
-        operation = await ai.models.generateVideos({
-            model: 'veo-3.1-fast-generate-preview',
-            prompt,
-            image: {
-                imageBytes: base64Data,
-                mimeType: imageFile.type,
-            },
-            config: {
-                numberOfVideos: 1,
-                resolution: '720p',
-                aspectRatio,
-            }
-        });
-    } else {
-        operation = await ai.models.generateVideos({
-            model: 'veo-3.1-fast-generate-preview',
-            prompt,
-            config: {
-                numberOfVideos: 1,
-                resolution: '720p',
-                aspectRatio,
-            }
-        });
-    }
-
-    return operation;
-};
-
-export const checkVideoStatus = async (operation: any) => {
-    const ai = createGenAI();
-    return await ai.operations.getVideosOperation({ operation });
-}
-
 export const analyzeImage = async (prompt: string, imageFile: File): Promise<string> => {
   const ai = createGenAI();
   const imagePart = await fileToImagePart(imageFile);
@@ -211,4 +173,37 @@ export const generatePresentation = async (prompt: string, template: Presentatio
     });
 
     return JSON.parse(response.text);
+};
+
+// FIX: Add generateVideo and checkVideoStatus functions to support Veo video generation.
+// These functions were missing, causing import errors in useVeo.ts.
+export const generateVideo = async (prompt: string, aspectRatio: '16:9' | '9:16', imageFile?: File) => {
+    const ai = createGenAI();
+
+    const payload: any = {
+        model: 'veo-3.1-fast-generate-preview',
+        prompt,
+        config: {
+            numberOfVideos: 1,
+            resolution: '1080p',
+            aspectRatio,
+        }
+    };
+
+    if (imageFile) {
+        const base64Data = await fileToBase64(imageFile);
+        payload.image = {
+            imageBytes: base64Data,
+            mimeType: imageFile.type
+        };
+    }
+    
+    const operation = await ai.models.generateVideos(payload);
+    return operation;
+};
+
+export const checkVideoStatus = async (operation: any) => {
+    const ai = createGenAI();
+    const updatedOperation = await ai.operations.getVideosOperation({ operation });
+    return updatedOperation;
 };
