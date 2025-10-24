@@ -1,0 +1,5 @@
+{
+  "name": "Gemini Assignment Assistant",
+  "description": "An all-in-one AI assistant to help with assignments. It can chat, generate and edit images, create videos, generate document outlines, and research topics using the power of Gemini models.",
+  "requestFramePermissions": []
+}
