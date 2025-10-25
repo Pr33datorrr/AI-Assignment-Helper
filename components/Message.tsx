@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Message as MessageType, Sender, PresentationTemplate } from '../types';
 import { marked } from 'marked';
 import JSZip from 'jszip';
@@ -80,36 +80,55 @@ const PresentationCard: React.FC<{ data: any, template: PresentationTemplate }> 
     const exportContainerRef = useRef<HTMLDivElement>(null);
     const styles = templateStyles[template] || templateStyles.Professional;
 
+    useEffect(() => {
+        const processDownload = async () => {
+            if (!isDownloading || !exportContainerRef.current) return;
+
+            // A small delay to ensure React has rendered the slides for export.
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            const slideElements = exportContainerRef.current.children;
+            if (!slideElements || slideElements.length === 0) {
+                console.error("Download failed: Slides for export were not found in the DOM.");
+                alert("An error occurred while preparing the download. Please try again.");
+                setIsDownloading(false);
+                return;
+            }
+
+            try {
+                const zip = new JSZip();
+                for (let i = 0; i < slideElements.length; i++) {
+                    const element = slideElements[i] as HTMLElement;
+                    const canvas = await html2canvas(element, { scale: 1 });
+                    const slideImage = canvas.toDataURL('image/jpeg', 0.9);
+                    zip.file(`slide-${i + 1}.jpeg`, slideImage.split(',')[1], { base64: true });
+                }
+
+                const zipBlob = await zip.generateAsync({ type: 'blob' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(zipBlob);
+                link.download = `${data.presentationTitle || 'presentation'}.zip`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            } catch (error) {
+                console.error("Failed to download presentation:", error);
+                alert("An error occurred while packaging the download.");
+            } finally {
+                setIsDownloading(false);
+            }
+        };
+
+        processDownload();
+    }, [isDownloading, data]);
+
     if (!data || !Array.isArray(data.slides) || data.slides.length === 0) {
         return <div className="bg-gray-800 p-4 rounded-lg border border-red-700 mt-2"><p className="text-red-400">Error: Presentation data is missing, empty, or malformed.</p></div>;
     }
     
-    const handleDownload = async () => {
-        setIsDownloading(true);
-        try {
-            const zip = new JSZip();
-            const slideElements = exportContainerRef.current?.children;
-            if (!slideElements) return;
-
-            for (let i = 0; i < slideElements.length; i++) {
-                const element = slideElements[i] as HTMLElement;
-                const canvas = await html2canvas(element, { scale: 1 });
-                const slideImage = canvas.toDataURL('image/jpeg', 0.9);
-                zip.file(`slide-${i + 1}.jpeg`, slideImage.split(',')[1], { base64: true });
-            }
-
-            const zipBlob = await zip.generateAsync({ type: 'blob' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(zipBlob);
-            link.download = `${data.presentationTitle || 'presentation'}.zip`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        } catch (error) {
-            console.error("Failed to download presentation:", error);
-            alert("An error occurred while preparing the download.");
-        } finally {
-            setIsDownloading(false);
+    const handleDownload = () => {
+        if (!isDownloading) {
+            setIsDownloading(true);
         }
     };
 

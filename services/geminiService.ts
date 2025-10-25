@@ -199,7 +199,16 @@ export const generatePresentation = async (prompt: string, template: Presentatio
         config: config
     });
 
-    const presentationData = JSON.parse(structureResponse.text);
+    // FIX: Sanitize the response to remove Markdown code blocks before parsing.
+    // The model sometimes wraps the JSON in ` ```json ... ``` ` which causes parsing to fail.
+    let responseText = structureResponse.text.trim();
+    const jsonRegex = /```json\s*([\s\S]*?)\s*```/;
+    const match = responseText.match(jsonRegex);
+    if (match && match[1]) {
+        responseText = match[1];
+    }
+    
+    const presentationData = JSON.parse(responseText);
 
     if (!presentationData.slides || presentationData.slides.length === 0) {
         return presentationData;

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatView from './components/ChatView';
@@ -36,17 +35,11 @@ const App: React.FC = () => {
     }, [projects, activeProjectId]);
 
     const handleCreateProject = (isDefault = false) => {
-        const projectName = isDefault ? "General" : prompt("Enter new project name:", `Project ${projects.length + 1}`);
-        if (!projectName) return;
-
-        let projectCategory = "General";
-        if (!isDefault) {
-            const categories = [...new Set(projects.map(p => p.category).filter(Boolean))];
-            const categoryPromptMessage = `Enter a category for this project.\nExisting categories: ${categories.join(', ')}`;
-            const categoryInput = prompt(categoryPromptMessage, "General");
-            if (categoryInput === null) return; // User cancelled
-            projectCategory = categoryInput;
-        }
+        // When triggered by the button, isDefault is false.
+        // We create a project with a default name instead of prompting the user,
+        // as prompt() can be blocked in some environments.
+        const projectName = isDefault ? "General" : `Project ${projects.length + 1}`;
+        const projectCategory = "General"; // Always default the category for simplicity
 
         const newProject: Project = {
             id: `proj-${Date.now()}`,
