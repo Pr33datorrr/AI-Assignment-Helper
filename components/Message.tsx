@@ -1,10 +1,13 @@
-
-import React from 'react';
+import React, { useState, useRef } from 'react';
 import { Message as MessageType, Sender, PresentationTemplate } from '../types';
 import { marked } from 'marked';
+import JSZip from 'jszip';
+import html2canvas from 'html2canvas';
+
 
 interface MessageProps {
   message: MessageType;
+  onReaction: (messageId: string, reaction: 'like' | 'dislike') => void;
 }
 
 const UserIcon = () => (
@@ -21,48 +24,146 @@ const LoadingSpinner: React.FC = () => (
 
 const templateStyles = {
     Professional: {
-        title: 'text-blue-300',
+        containerBorder: 'border-blue-700',
+        headerText: 'text-blue-300',
+        slideBg: 'bg-slate-800',
         slideTitle: 'text-cyan-300',
-        border: 'border-blue-700'
+        slideContent: 'text-slate-200',
+        navButton: 'bg-blue-600 hover:bg-blue-500 disabled:bg-blue-900',
     },
     Creative: {
-        title: 'text-purple-300',
+        containerBorder: 'border-purple-700',
+        headerText: 'text-purple-300',
+        slideBg: 'bg-gradient-to-br from-indigo-900 to-purple-900',
         slideTitle: 'text-pink-300',
-        border: 'border-purple-700'
+        slideContent: 'text-purple-200',
+        navButton: 'bg-purple-600 hover:bg-purple-500 disabled:bg-purple-900',
     },
     Minimalist: {
-        title: 'text-gray-200',
-        slideTitle: 'text-gray-400',
-        border: 'border-gray-600'
+        containerBorder: 'border-gray-600',
+        headerText: 'text-gray-200',
+        slideBg: 'bg-gray-700',
+        slideTitle: 'text-gray-100',
+        slideContent: 'text-gray-300',
+        navButton: 'bg-gray-600 hover:bg-gray-500 disabled:bg-gray-800',
     }
 };
 
-const PresentationCard: React.FC<{ data: any, template: PresentationTemplate }> = ({ data, template }) => {
-    const styles = templateStyles[template] || templateStyles.Professional;
+const SlideExporter: React.FC<{ slide: any, template: PresentationTemplate, styles: any }> = ({ slide, styles }) => {
+    const hasContent = Array.isArray(slide.content) && slide.content.length > 0;
     return (
-        <div className={`bg-gray-800 p-4 rounded-lg border ${styles.border} mt-2`}>
-            <h3 className={`text-xl font-bold mb-2 ${styles.title}`}>{data.presentationTitle}</h3>
-            {data.slides.map((slide: any, index: number) => (
-                <div key={index} className="mb-3 pl-4 border-l-2 border-gray-600">
-                    <h4 className={`font-semibold ${styles.slideTitle}`}>{index + 1}. {slide.slideTitle}</h4>
-                    <ul className="list-disc pl-5 text-gray-300">
-                        {slide.content.map((point: string, pIndex: number) => (
-                            <li key={pIndex}>{point}</li>
-                        ))}
-                    </ul>
-                </div>
-            ))}
+        <div className={`aspect-video w-[1280px] h-[720px] ${styles.slideBg} p-12 flex flex-col shadow-lg`}>
+            <h4 className={`text-5xl font-bold mb-8 text-center ${styles.slideTitle}`}>{slide.slideTitle}</h4>
+            <div className="flex-grow flex items-stretch justify-center gap-8 min-h-0">
+                {slide.imageUrl && (
+                    <div className={`flex items-center justify-center ${hasContent ? 'w-1/2' : 'w-full'}`}>
+                        <img src={slide.imageUrl} alt={slide.slideTitle} className="max-w-full max-h-full object-contain" />
+                    </div>
+                )}
+                {hasContent && (
+                    <div className={`flex items-center ${slide.imageUrl ? 'w-1/2' : 'w-full'}`}>
+                         <ul className={`list-disc pl-10 text-3xl space-y-4 ${styles.slideContent}`}>
+                            {slide.content.map((point: string, pIndex: number) => (
+                                <li key={pIndex}>{point}</li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
+            </div>
         </div>
     );
 };
 
+const PresentationCard: React.FC<{ data: any, template: PresentationTemplate }> = ({ data, template }) => {
+    const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
+    const [isDownloading, setIsDownloading] = useState(false);
+    const exportContainerRef = useRef<HTMLDivElement>(null);
+    const styles = templateStyles[template] || templateStyles.Professional;
 
-const Message: React.FC<MessageProps> = ({ message }) => {
+    if (!data || !Array.isArray(data.slides) || data.slides.length === 0) {
+        return <div className="bg-gray-800 p-4 rounded-lg border border-red-700 mt-2"><p className="text-red-400">Error: Presentation data is missing, empty, or malformed.</p></div>;
+    }
+    
+    const handleDownload = async () => {
+        setIsDownloading(true);
+        try {
+            const zip = new JSZip();
+            const slideElements = exportContainerRef.current?.children;
+            if (!slideElements) return;
+
+            for (let i = 0; i < slideElements.length; i++) {
+                const element = slideElements[i] as HTMLElement;
+                const canvas = await html2canvas(element, { scale: 1 });
+                const slideImage = canvas.toDataURL('image/jpeg', 0.9);
+                zip.file(`slide-${i + 1}.jpeg`, slideImage.split(',')[1], { base64: true });
+            }
+
+            const zipBlob = await zip.generateAsync({ type: 'blob' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(zipBlob);
+            link.download = `${data.presentationTitle || 'presentation'}.zip`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        } catch (error) {
+            console.error("Failed to download presentation:", error);
+            alert("An error occurred while preparing the download.");
+        } finally {
+            setIsDownloading(false);
+        }
+    };
+
+    const totalSlides = data.slides.length;
+    const currentSlide = data.slides[currentSlideIndex];
+
+    const goToNextSlide = () => setCurrentSlideIndex(prev => Math.min(prev + 1, totalSlides - 1));
+    const goToPrevSlide = () => setCurrentSlideIndex(prev => Math.max(prev - 1, 0));
+
+    if (!currentSlide) {
+         return <div className="bg-gray-800 p-4 rounded-lg border border-red-700 mt-2"><h3 className={`text-xl font-bold mb-2 ${styles.headerText}`}>{data.presentationTitle}</h3><p className="text-red-400">Error: The current slide data could not be loaded.</p></div>;
+    }
+
+    const hasContent = Array.isArray(currentSlide.content) && currentSlide.content.length > 0;
+
+    return (
+        <div className={`bg-gray-800 p-4 rounded-lg border ${styles.containerBorder} mt-2`}>
+            <div className="flex justify-between items-center mb-4">
+                 <h3 className={`text-xl font-bold ${styles.headerText}`}>{data.presentationTitle}</h3>
+                 <button onClick={handleDownload} disabled={isDownloading} className="bg-teal-600 hover:bg-teal-500 text-white text-sm font-bold py-1 px-3 rounded-lg transition-colors disabled:bg-gray-600 disabled:cursor-wait">
+                    {isDownloading ? 'Packaging...' : 'Download'}
+                 </button>
+            </div>
+            
+            <div className={`aspect-video w-full ${styles.slideBg} rounded-md p-6 flex flex-col shadow-lg`}>
+                <h4 className={`text-2xl font-bold mb-4 text-center ${styles.slideTitle}`}>{currentSlide.slideTitle}</h4>
+                <div className="flex-grow flex items-stretch justify-center gap-6 min-h-0">
+                    {currentSlide.imageUrl && <div className={`flex items-center justify-center ${hasContent ? 'w-1/2' : 'w-full'}`}><img src={currentSlide.imageUrl} alt={currentSlide.slideTitle} className="max-w-full max-h-full object-contain rounded-md shadow-md" /></div>}
+                    {hasContent && <div className={`flex items-center ${currentSlide.imageUrl ? 'w-1/2' : 'w-full'}`}><ul className={`list-disc pl-5 text-lg space-y-2 ${styles.slideContent}`}>{currentSlide.content.map((point: string, pIndex: number) => <li key={pIndex}>{point}</li>)}</ul></div>}
+                </div>
+            </div>
+
+            <div className="flex items-center justify-center mt-4 gap-4">
+                <button onClick={goToPrevSlide} disabled={currentSlideIndex === 0} className={`px-4 py-2 rounded-lg text-white font-semibold transition ${styles.navButton} disabled:opacity-50 disabled:cursor-not-allowed`}>Previous</button>
+                <span className="text-gray-400 font-mono text-sm">{currentSlideIndex + 1} / {totalSlides}</span>
+                <button onClick={goToNextSlide} disabled={currentSlideIndex === totalSlides - 1} className={`px-4 py-2 rounded-lg text-white font-semibold transition ${styles.navButton} disabled:opacity-50 disabled:cursor-not-allowed`}>Next</button>
+            </div>
+
+            {/* Hidden container for exporting */}
+            <div ref={exportContainerRef} className="absolute -left-[9999px] top-0">
+                {isDownloading && data.slides.map((slide: any, index: number) => (
+                    <SlideExporter key={index} slide={slide} template={template} styles={styles} />
+                ))}
+            </div>
+        </div>
+    );
+};
+
+const Message: React.FC<MessageProps> = ({ message, onReaction }) => {
   const isUser = message.sender === Sender.User;
   const parsedHtml = message.text ? marked.parse(message.text) : '';
   
   return (
-    <div className={`flex items-start gap-4 my-4 ${isUser ? 'justify-end' : ''}`}>
+    <div className={`group flex items-start gap-4 my-4 ${isUser ? 'justify-end' : ''}`}>
       {!isUser && <div className="flex-shrink-0"><AiIcon /></div>}
       
       <div className={`max-w-2xl w-full px-5 py-3 rounded-xl ${isUser ? 'bg-indigo-600' : 'bg-gray-700'}`}>
@@ -96,6 +197,21 @@ const Message: React.FC<MessageProps> = ({ message }) => {
           </>
         )}
       </div>
+
+      {!isUser && !message.isLoading && (
+        <div className="flex-shrink-0 self-center opacity-0 group-hover:opacity-100 transition-opacity">
+            <button onClick={() => onReaction(message.id, 'like')} className="p-1 rounded-full hover:bg-gray-600">
+                <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 ${message.reaction === 'like' ? 'text-green-400' : 'text-gray-400'}`} viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M2 10.5a1.5 1.5 0 113 0v6a1.5 1.5 0 01-3 0v-6zM6 10.333V17a1 1 0 001 1h6.758a1 1 0 00.97-1.22l-1.934-6.11A1 1 0 0012 9H7a1 1 0 00-1 1.333zM17 10.5a1.5 1.5 0 11-3 0v6a1.5 1.5 0 013 0v-6z" />
+                </svg>
+            </button>
+             <button onClick={() => onReaction(message.id, 'dislike')} className="p-1 rounded-full hover:bg-gray-600 ml-1">
+                <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 ${message.reaction === 'dislike' ? 'text-red-400' : 'text-gray-400'}`} viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M18 9.5a1.5 1.5 0 11-3 0v-6a1.5 1.5 0 013 0v6zM14 9.667V3a1 1 0 00-1-1H6.242a1 1 0 00-.97 1.22l1.934 6.11A1 1 0 008 11h5a1 1 0 001-1.333zM3 9.5a1.5 1.5 0 113 0v-6a1.5 1.5 0 01-3 0v6z" />
+                </svg>
+            </button>
+        </div>
+      )}
 
       {isUser && <div className="flex-shrink-0"><UserIcon/></div>}
     </div>

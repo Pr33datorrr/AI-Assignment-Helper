@@ -10,6 +10,31 @@ interface ChatViewProps {
     onUpdateProject: (projectId: string, updates: Partial<Project>) => void;
 }
 
+const getFriendlyErrorMessage = (error: any): string => {
+    const errorMessage = error.message || String(error);
+    console.error("API Call Failed:", error); // Keep detailed log for developers
+
+    if (errorMessage.includes('API key not valid')) {
+        return "Authentication Error: The API key is invalid. Please check your setup.";
+    }
+    if (errorMessage.includes('429') || /rate limit/i.test(errorMessage)) {
+        return "Rate Limit Exceeded: You've sent too many requests in a short period. Please wait and try again later.";
+    }
+    if (/safety/i.test(errorMessage) || /blocked/i.test(errorMessage)) {
+        return "Content Safety: The request was blocked due to safety settings. Please adjust your prompt.";
+    }
+    if (error instanceof SyntaxError) {
+        return "Invalid Response: The AI returned a malformed response. This might be a temporary issue. Please try again.";
+    }
+    if (errorMessage.includes("Requested entity was not found.")) {
+        return "API Key Error: The selected API key may not have the necessary permissions or billing enabled for this model. Please select a different key.";
+    }
+
+    // Fallback for generic errors
+    return `An unexpected error occurred: ${errorMessage}`;
+};
+
+
 const ChatView: React.FC<ChatViewProps> = ({ project, onUpdateProject }) => {
     const [messages, setMessages] = useState<Message[]>(project.history);
     const [isLoading, setIsLoading] = useState(false);
@@ -27,14 +52,6 @@ const ChatView: React.FC<ChatViewProps> = ({ project, onUpdateProject }) => {
         onUpdateProject(project.id, { history: newHistory });
     };
 
-    const addMessage = (message: Omit<Message, 'id'>) => {
-        const newMessage = { ...message, id: `${message.sender}-${Date.now()}` };
-        const updatedHistory = [...messages, newMessage];
-        setMessages(updatedHistory);
-        updateHistory(updatedHistory);
-        return newMessage;
-    };
-
     const handleSaveVersion = () => {
         const versionName = prompt("Enter a name for this version:", `Version ${(project.versions?.length || 0) + 1}`);
         if (!versionName) return;
@@ -50,21 +67,47 @@ const ChatView: React.FC<ChatViewProps> = ({ project, onUpdateProject }) => {
         onUpdateProject(project.id, { versions: updatedVersions });
         alert(`Version "${versionName}" saved!`);
     };
+    
+    const handleReaction = (messageId: string, reaction: 'like' | 'dislike') => {
+        const newHistory = messages.map(m => {
+            if (m.id === messageId) {
+                // Toggle reaction off if the same one is clicked again
+                return { ...m, reaction: m.reaction === reaction ? undefined : reaction };
+            }
+            return m;
+        });
+        setMessages(newHistory);
+        updateHistory(newHistory);
+    };
 
     const handleSendMessage = async (
         prompt: string,
         mode: GenerationMode,
-        options: { aspectRatio?: AspectRatio; imageFile?: File; presentationTemplate?: PresentationTemplate }
+        options: { aspectRatio?: AspectRatio; imageFile?: File; presentationTemplate?: PresentationTemplate, useWebSearch?: boolean }
     ) => {
         setIsLoading(true);
 
         const userMessageText = options.imageFile ? `${prompt} (with uploaded image)` : prompt;
-        addMessage({ sender: Sender.User, text: userMessageText });
 
-        const loadingMsg = addMessage({ sender: Sender.AI, text: 'Thinking...', isLoading: true });
+        const userMessage: Message = {
+            id: `user-${Date.now()}`,
+            sender: Sender.User,
+            text: userMessageText,
+        };
+
+        const loadingMsg: Message = {
+            id: `ai-${Date.now()}`,
+            sender: Sender.AI,
+            text: 'Thinking...',
+            isLoading: true,
+        };
+
+        const historyForApi = [...messages, userMessage];
+        setMessages(prevMessages => [...prevMessages, userMessage, loadingMsg]);
 
         try {
             let aiResponse: Partial<Message> = { text: '' };
+            const useWebSearch = options.useWebSearch || false;
 
             switch (mode) {
                 case GenerationMode.GenerateImage:
@@ -79,38 +122,36 @@ const ChatView: React.FC<ChatViewProps> = ({ project, onUpdateProject }) => {
                     aiResponse.text = await geminiService.analyzeImage(prompt, options.imageFile!);
                     break;
                 case GenerationMode.ComplexQuery:
-                    aiResponse.text = await geminiService.runComplexQuery(prompt);
-                    break;
-                case GenerationMode.SearchWeb:
-                    const searchResult = await geminiService.searchWeb(prompt);
-                    aiResponse.text = searchResult.text;
-                    aiResponse.references = searchResult.references;
+                    const complexResponse = await geminiService.runComplexQuery(prompt, useWebSearch);
+                    aiResponse.text = complexResponse.text;
+                    aiResponse.references = complexResponse.candidates?.[0]?.groundingMetadata?.groundingChunks as GroundingChunk[];
                     break;
                 case GenerationMode.GeneratePPT:
-                    aiResponse.jsonContent = await geminiService.generatePresentation(prompt, options.presentationTemplate!);
+                    aiResponse.jsonContent = await geminiService.generatePresentation(prompt, options.presentationTemplate!, useWebSearch);
                     aiResponse.text = "Here's the presentation outline I've generated for you.";
                     aiResponse.presentationTemplate = options.presentationTemplate;
                     break;
                 case GenerationMode.Chat:
                 default:
-                    const historyForChat = messages
+                    const historyForChat = historyForApi
                       .filter(m => !m.isLoading && m.text)
                       .map(m => ({
                         role: m.sender === Sender.User ? 'user' : 'model',
                         parts: [{ text: m.text }],
                       }));
-                    const chatResponse = await geminiService.runChat(historyForChat, prompt);
+                    const chatResponse = await geminiService.runChat(historyForChat, prompt, useWebSearch);
                     aiResponse.text = chatResponse.text;
+                    aiResponse.references = chatResponse.candidates?.[0]?.groundingMetadata?.groundingChunks as GroundingChunk[];
                     break;
             }
             
-            const finalHistory = messages.map(m => m.id === loadingMsg.id ? { ...m, ...aiResponse, isLoading: false, id: loadingMsg.id } : m);
+            const finalHistory = [...historyForApi, { ...loadingMsg, ...aiResponse, isLoading: false }];
             setMessages(finalHistory);
             updateHistory(finalHistory);
 
         } catch (error: any) {
-            const errorText = `An error occurred: ${error.message}`;
-            const errorHistory = messages.map(m => m.id === loadingMsg.id ? { ...m, text: errorText, isLoading: false, id: loadingMsg.id } : m);
+            const friendlyErrorText = getFriendlyErrorMessage(error);
+            const errorHistory = [...historyForApi, { ...loadingMsg, text: friendlyErrorText, isLoading: false }];
             setMessages(errorHistory);
             updateHistory(errorHistory);
         } finally {
@@ -139,7 +180,7 @@ const ChatView: React.FC<ChatViewProps> = ({ project, onUpdateProject }) => {
                     </div>
                 )}
                 {messages.map((msg) => (
-                    <MessageComponent key={msg.id} message={msg} />
+                    <MessageComponent key={msg.id} message={msg} onReaction={handleReaction} />
                 ))}
                 <div ref={messagesEndRef} />
             </main>

@@ -1,5 +1,5 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { GenerationMode, AspectRatio, PresentationTemplate } from '../types';
 
 interface InputBarProps {
@@ -10,6 +10,7 @@ interface InputBarProps {
             aspectRatio?: AspectRatio; 
             imageFile?: File; 
             presentationTemplate?: PresentationTemplate;
+            useWebSearch?: boolean;
         }
     ) => void;
     isLoading: boolean;
@@ -23,12 +24,25 @@ const InputBar: React.FC<InputBarProps> = ({ onSendMessage, isLoading }) => {
     const [aspectRatio, setAspectRatio] = useState<AspectRatio>('1:1');
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [presentationTemplate, setPresentationTemplate] = useState<PresentationTemplate>('Professional');
+    const [useWebSearch, setUseWebSearch] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const needsImageUpload = [
         GenerationMode.EditImage,
         GenerationMode.AnalyzeImage,
     ].includes(mode);
+
+    const webSearchCompatible = [
+        GenerationMode.Chat,
+        GenerationMode.ComplexQuery,
+        GenerationMode.GeneratePPT,
+    ].includes(mode);
+
+    useEffect(() => {
+        if (!webSearchCompatible) {
+            setUseWebSearch(false);
+        }
+    }, [mode, webSearchCompatible]);
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         if (event.target.files && event.target.files[0]) {
@@ -49,6 +63,7 @@ const InputBar: React.FC<InputBarProps> = ({ onSendMessage, isLoading }) => {
             aspectRatio: (mode === GenerationMode.GenerateImage) ? aspectRatio : undefined, 
             imageFile: imageFile ?? undefined,
             presentationTemplate: mode === GenerationMode.GeneratePPT ? presentationTemplate : undefined,
+            useWebSearch: useWebSearch && webSearchCompatible,
         });
         setPrompt('');
         setImageFile(null);
@@ -59,12 +74,11 @@ const InputBar: React.FC<InputBarProps> = ({ onSendMessage, isLoading }) => {
 
     const handleModeChange = (newMode: GenerationMode) => {
         setMode(newMode);
-        setImageFile(null); // Reset file on mode change
+        setImageFile(null);
     };
 
     return (
         <div className="bg-gray-800 p-4 border-t border-gray-700">
-            {/* Mode Selector */}
             <div className="flex flex-wrap gap-2 mb-3">
                 {modes.map(m => (
                     <button
@@ -79,7 +93,6 @@ const InputBar: React.FC<InputBarProps> = ({ onSendMessage, isLoading }) => {
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-3">
                 <div className="flex gap-3">
-                    {/* Main Prompt Input */}
                     <textarea
                         value={prompt}
                         onChange={(e) => setPrompt(e.target.value)}
@@ -93,7 +106,6 @@ const InputBar: React.FC<InputBarProps> = ({ onSendMessage, isLoading }) => {
                         disabled={isLoading}
                     />
 
-                    {/* Submit Button */}
                     <button
                         type="submit"
                         disabled={isLoading}
@@ -108,17 +120,11 @@ const InputBar: React.FC<InputBarProps> = ({ onSendMessage, isLoading }) => {
                     </button>
                 </div>
                 
-                {/* Mode-specific Options */}
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4 flex-wrap">
                     {mode === GenerationMode.GenerateImage && (
                         <div>
                             <label htmlFor="aspectRatio" className="text-sm text-gray-400 mr-2">Aspect Ratio:</label>
-                            <select
-                                id="aspectRatio"
-                                value={aspectRatio}
-                                onChange={(e) => setAspectRatio(e.target.value as AspectRatio)}
-                                className="bg-gray-700 rounded p-1 text-sm focus:ring-indigo-500 focus:outline-none"
-                            >
+                            <select id="aspectRatio" value={aspectRatio} onChange={(e) => setAspectRatio(e.target.value as AspectRatio)} className="bg-gray-700 rounded p-1 text-sm focus:ring-indigo-500 focus:outline-none">
                                 <option value="1:1">1:1 (Square)</option>
                                 <option value="16:9">16:9 (Widescreen)</option>
                                 <option value="9:16">9:16 (Portrait)</option>
@@ -130,12 +136,7 @@ const InputBar: React.FC<InputBarProps> = ({ onSendMessage, isLoading }) => {
                      {mode === GenerationMode.GeneratePPT && (
                         <div>
                             <label htmlFor="presentationTemplate" className="text-sm text-gray-400 mr-2">Template:</label>
-                            <select
-                                id="presentationTemplate"
-                                value={presentationTemplate}
-                                onChange={(e) => setPresentationTemplate(e.target.value as PresentationTemplate)}
-                                className="bg-gray-700 rounded p-1 text-sm focus:ring-indigo-500 focus:outline-none"
-                            >
+                            <select id="presentationTemplate" value={presentationTemplate} onChange={(e) => setPresentationTemplate(e.target.value as PresentationTemplate)} className="bg-gray-700 rounded p-1 text-sm focus:ring-indigo-500 focus:outline-none">
                                 <option value="Professional">Professional</option>
                                 <option value="Creative">Creative</option>
                                 <option value="Minimalist">Minimalist</option>
@@ -144,23 +145,24 @@ const InputBar: React.FC<InputBarProps> = ({ onSendMessage, isLoading }) => {
                     )}
                     {needsImageUpload && (
                         <div className="flex items-center gap-2">
-                           <button
-                                type="button"
-                                onClick={() => fileInputRef.current?.click()}
-                                className="bg-gray-700 hover:bg-gray-600 text-sm py-1 px-3 rounded"
-                           >
+                           <button type="button" onClick={() => fileInputRef.current?.click()} className="bg-gray-700 hover:bg-gray-600 text-sm py-1 px-3 rounded">
                                {imageFile ? "Change Image" : "Upload Image"}
                            </button>
-                           <input
-                                type="file"
-                                ref={fileInputRef}
-                                onChange={handleFileChange}
-                                accept="image/*"
-                                className="hidden"
-                            />
+                           <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
                            {imageFile && <span className="text-sm text-gray-400 truncate max-w-xs">{imageFile.name}</span>}
                         </div>
                     )}
+                    <div className="flex items-center">
+                        <input 
+                            type="checkbox" 
+                            id="webSearch" 
+                            checked={useWebSearch} 
+                            onChange={(e) => setUseWebSearch(e.target.checked)}
+                            disabled={!webSearchCompatible || isLoading}
+                            className="w-4 h-4 text-indigo-600 bg-gray-700 border-gray-600 rounded focus:ring-indigo-500 disabled:opacity-50"
+                        />
+                        <label htmlFor="webSearch" className={`ml-2 text-sm ${!webSearchCompatible ? 'text-gray-600' : 'text-gray-300'}`}>Use Web Search</label>
+                    </div>
                 </div>
             </form>
         </div>

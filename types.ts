@@ -11,7 +11,6 @@ export enum GenerationMode {
   EditImage = 'Edit Image',
   AnalyzeImage = 'Analyze Image',
   ComplexQuery = 'Complex Query',
-  SearchWeb = 'Search Web',
   GeneratePPT = 'Generate Presentation',
 }
 
@@ -37,6 +36,7 @@ export interface Message {
   references?: GroundingChunk[];
   jsonContent?: any;
   presentationTemplate?: PresentationTemplate;
+  reaction?: 'like' | 'dislike';
 }
 
 export interface ProjectVersion {
